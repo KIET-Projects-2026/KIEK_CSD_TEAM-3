@@ -21,6 +21,7 @@ import CandidateDashboard from './pages/candidate/CandidateDashboard';
 import CandidateProfile from './pages/candidate/CandidateProfile';
 import UploadResume from './pages/candidate/UploadResume';
 import JobMatches from './pages/candidate/JobMatches';
+import SpecificJobMatch from './pages/candidate/SpecificJobMatch';
 
 function App() {
   return (
@@ -50,6 +51,7 @@ function App() {
               <Route path="/candidate/profile" element={<CandidateProfile />} />
               <Route path="/candidate/upload-resume" element={<UploadResume />} />
               <Route path="/candidate/job-matches" element={<JobMatches />} />
+              <Route path="/candidate/specific-match" element={<SpecificJobMatch />} />
             </Route>
           </Routes>
         </main>

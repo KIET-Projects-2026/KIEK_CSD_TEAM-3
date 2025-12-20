@@ -31,6 +31,10 @@ export const matchResume = (formData) => apiClient.post('/candidate/match', form
 });
 export const applyToJob = (jobId, applicationData) => apiClient.post(`/candidate/apply/${jobId}`, applicationData);
 export const getCandidateApplications = () => apiClient.get('/candidate/applications');
+export const getAllJobs = () => apiClient.get('/candidate/jobs');
+export const checkJobScore = (jobId, formData) => apiClient.post(`/candidate/check-score/${jobId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+});
 
 // Recruiter
 export const getRecruiterJobs = () => apiClient.get('/recruiter/jobs');

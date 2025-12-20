@@ -65,13 +65,76 @@ router.post('/match', upload.single('resume'), async (req, res) => {
     }
 });
 
+// @route   GET /api/candidate/jobs
+// @desc    Get all jobs for specific matching
+// @access  Protected
+router.get('/jobs', async (req, res) => {
+    try {
+        const jobs = await Job.find({}).sort({ postedAt: -1 });
+        res.json(jobs);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+});
+
+// @route   POST /api/candidate/check-score/:jobId
+// @desc    Check score for a specific job (No DB save)
+// @access  Protected
+router.post('/check-score/:jobId', upload.single('resume'), async (req, res) => {
+    try {
+        const { jobId } = req.params;
+
+        if (!req.file) {
+            return res.status(400).json({ message: 'Resume file is required' });
+        }
+
+        const job = await Job.findById(jobId);
+        if (!job) {
+             if (req.file) fs.unlink(req.file.path, () => {});
+            return res.status(404).json({ message: 'Job not found' });
+        }
+
+        // Prepare single job for ML
+        const jobsForML = [{
+            id: job._id.toString(),
+            title: job.title,
+            description: job.description
+        }];
+
+        // Call ML service
+        const mlResponse = await getJobMatches(req.file.path, jobsForML);
+
+        // Cleanup
+        fs.unlink(req.file.path, () => {});
+
+        if (!mlResponse || mlResponse.status !== 'success' || !Array.isArray(mlResponse.matches) || mlResponse.matches.length === 0) {
+            return res.status(500).json({ message: 'Error calculating score' });
+        }
+
+        const result = mlResponse.matches[0];
+        
+        return res.json({
+            success: true,
+            score: result.score,
+            matchingSkills: result.matching_skills || [],
+            missingSkills: result.missing_skills || []
+        });
+
+    } catch (error) {
+        console.error(error);
+        if (req.file) fs.unlink(req.file.path, () => {});
+        res.status(500).json({ message: 'Server Error' });
+    }
+});
+
 // @route   POST /api/candidate/apply/:jobId
 // @desc    Apply to a specific job (Save to DB)
 // @access  Protected
 router.post('/apply/:jobId', async (req, res) => {
     try {
         const { jobId } = req.params;
-        const { score, matchingSkills, missingSkills } = req.body;
+        const { score, matchingSkills, missingSkills, source } = req.body;
         
         const candidateId = req.user.id;
 
@@ -93,7 +156,8 @@ router.post('/apply/:jobId', async (req, res) => {
             candidateId,
             score: score || 0,
             matchingSkills: matchingSkills || [],
-            missingSkills: missingSkills || []
+            missingSkills: missingSkills || [],
+            source: source || 'global_match'
         });
 
         await application.save();

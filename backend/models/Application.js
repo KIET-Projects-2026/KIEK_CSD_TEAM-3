@@ -28,6 +28,11 @@ const applicationSchema = new mongoose.Schema({
         type: String,
         enum: ['pending', 'accepted', 'rejected'],
         default: 'pending'
+    },
+    source: {
+        type: String,
+        enum: ['global_match', 'specific_match'],
+        default: 'global_match'
     }
 });
 
