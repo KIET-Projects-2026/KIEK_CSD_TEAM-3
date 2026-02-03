@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuthStore } from '../../store/authStore';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import RoleSelector from '../../components/common/RoleSelector';
+import Card from '../../components/ui/Card';
+import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
+import { motion } from 'framer-motion';
 
 const Register = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const login = useAuthStore((state) => state.login);
+  const { login } = useAuth();
   
   const [role, setRole] = useState(searchParams.get('role') || 'candidate');
   const [name, setName] = useState('');
@@ -15,6 +19,7 @@ const Register = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordStrength, setPasswordStrength] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // Update role if query param changes
   useEffect(() => {
@@ -26,7 +31,8 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+    setIsLoading(true);
+
     try {
         const payload = {
             name,
@@ -44,7 +50,7 @@ const Register = () => {
         const user = { ...data };
         delete user.token;
         
-        login(user, token, role); // Using login action (or register action if preferred)
+        login(user, token, role); 
         
         if (role === 'recruiter') {
           navigate('/recruiter/dashboard');
@@ -54,153 +60,131 @@ const Register = () => {
     } catch (error) {
         console.error("Registration failed:", error);
         alert(error.response?.data?.message || 'Registration failed');
+    } finally {
+        setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-        <h2 className="mt-10 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900">
-          Create a new account
-        </h2>
-      </div>
+    <div className="flex min-h-[90vh] flex-col justify-center px-6 py-12 lg:px-8">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="sm:mx-auto sm:w-full sm:max-w-md"
+      >
+        <Card className="px-6 py-12 sm:px-10">
+            <div className="mb-10 text-center">
+                <h2 className="text-3xl font-bold tracking-tight text-text-primary">
+                Create an account
+                </h2>
+                <p className="mt-2 text-sm text-text-muted">
+                    Get started with ResumeAI today
+                </p>
+            </div>
 
-      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-        <RoleSelector selectedRole={role} onSelect={setRole} />
-        
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium leading-6 text-gray-900">
-              Full Name
-            </label>
-            <div className="mt-2">
-              <input
+            <RoleSelector selectedRole={role} onSelect={setRole} />
+            
+            <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            <Input
+                label="Full Name"
                 id="name"
-                name="name"
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="block w-full rounded-md border-0 p-2 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-              />
-            </div>
-          </div>
+                placeholder="John Doe"
+            />
 
-          {role === 'recruiter' && (
-             <div>
-               <label htmlFor="companyName" className="block text-sm font-medium leading-6 text-gray-900">
-                 Company Name
-               </label>
-               <div className="mt-2">
-                 <input
+            {role === 'recruiter' && (
+                <Input
+                   label="Company Name"
                    id="companyName"
-                   name="companyName"
                    type="text"
                    required
                    value={companyName}
                    onChange={(e) => setCompanyName(e.target.value)}
-                   className="block w-full rounded-md border-0 p-2 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                 />
-               </div>
-             </div>
-          )}
+                   placeholder="Acme Inc."
+                />
+            )}
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium leading-6 text-gray-900">
-              Email address
-            </label>
-            <div className="mt-2">
-              <input
+            <Input
+                label="Email address"
                 id="email"
-                name="email"
                 type="email"
                 autoComplete="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="block w-full rounded-md border-0 p-2 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-              />
-            </div>
-          </div>
+                placeholder="you@example.com"
+            />
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium leading-6 text-gray-900">
-              Password
-            </label>
-            <div className="mt-2">
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => {
-                    const newPass = e.target.value;
-                    setPassword(newPass);
-                    // Simple strength meter
-                    if (newPass.length === 0) setPasswordStrength('');
-                    else if (newPass.length < 6) setPasswordStrength('Weak');
-                    else if (newPass.length < 10 || !/[A-Z]/.test(newPass) || !/[0-9]/.test(newPass)) setPasswordStrength('Medium');
-                    else setPasswordStrength('Strong');
-                }}
-                className="block w-full rounded-md border-0 p-2 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-              />
-              {passwordStrength && (
-                 <p className={`text-xs mt-1 ${
-                     passwordStrength === 'Weak' ? 'text-red-500' :
-                     passwordStrength === 'Medium' ? 'text-yellow-600' : 'text-green-600'
-                 }`}>
-                    Strength: {passwordStrength}
-                 </p>
-              )}
+            <div>
+                <Input
+                    label="Password"
+                    id="password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    value={password}
+                    onChange={(e) => {
+                        const newPass = e.target.value;
+                        setPassword(newPass);
+                        // Simple strength meter
+                        if (newPass.length === 0) setPasswordStrength('');
+                        else if (newPass.length < 6) setPasswordStrength('Weak');
+                        else if (newPass.length < 10 || !/[A-Z]/.test(newPass) || !/[0-9]/.test(newPass)) setPasswordStrength('Medium');
+                        else setPasswordStrength('Strong');
+                    }}
+                    placeholder="••••••••"
+                />
+                 {passwordStrength && (
+                    <p className={`text-xs mt-1.5 ml-1 ${
+                        passwordStrength === 'Weak' ? 'text-red-500' :
+                        passwordStrength === 'Medium' ? 'text-yellow-600' : 'text-green-600'
+                    }`}>
+                       Strength: {passwordStrength}
+                    </p>
+                 )}
             </div>
-          </div>
 
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium leading-6 text-gray-900">
-              Confirm Password
-            </label>
-            <div className="mt-2">
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="block w-full rounded-md border-0 p-2 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-              />
-               {confirmPassword && password !== confirmPassword && (
-                  <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
-               )}
+            <div>
+                <Input
+                    label="Confirm Password"
+                    id="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    error={confirmPassword && password !== confirmPassword ? "Passwords do not match" : null}
+                    placeholder="••••••••"
+                />
             </div>
-          </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={!name || !email || !password || password !== confirmPassword || (role === 'recruiter' && !companyName)}
-              className="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            <Button
+                type="submit"
+                className="w-full"
+                isLoading={isLoading}
+                disabled={!name || !email || !password || password !== confirmPassword || (role === 'recruiter' && !companyName)}
             >
-              Sign up as {role === 'recruiter' ? 'Recruiter' : 'Candidate'}
-            </button>
-          </div>
-        </form>
+                Sign up as {role === 'recruiter' ? 'Recruiter' : 'Candidate'}
+            </Button>
+            </form>
 
-        <p className="mt-10 text-center text-sm text-gray-500">
-          Already have an account?{' '}
-          <button 
-            onClick={() => navigate(`/login?role=${role}`)} 
-            className="font-semibold leading-6 text-indigo-600 hover:text-indigo-500"
-          >
-            Login
-          </button>
-        </p>
-      </div>
+            <p className="mt-8 text-center text-sm text-text-muted">
+            Already have an account?{' '}
+            <Link 
+                to={`/login?role=${role}`}
+                className="font-semibold text-primary hover:text-primary-dark transition-colors"
+            >
+                Log in
+            </Link>
+            </p>
+        </Card>
+      </motion.div>
     </div>
   );
 };
 
 export default Register;
+

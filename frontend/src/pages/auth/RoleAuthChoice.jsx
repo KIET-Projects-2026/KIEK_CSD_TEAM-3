@@ -1,53 +1,67 @@
 import React from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import Card from '../../components/ui/Card';
+import { User, Briefcase } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const RoleAuthChoice = () => {
-  const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
-  const role = searchParams.get('role') || 'candidate';
-  const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
-
-  const handleAnalytics = (action) => {
-    if (window.dataLayer) {
-      window.dataLayer.push({
-        event: 'auth_choice',
-        role,
-        action,
-      });
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-          Continue as {roleLabel}
+    <div className="min-h-[85vh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-xl text-center mb-10">
+        <h2 className="text-3xl font-bold tracking-tight text-text-primary">
+          Join ResumeAI
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Please log in or create a new account to proceed.
+        <p className="mt-2 text-lg text-text-muted">
+          Choose your account type to get started
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 space-y-4">
-          <Link
-            to={`/login?role=${role}`}
-            onClick={() => handleAnalytics('login')}
-            className="flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-          >
-            Login
-          </Link>
-          <Link
-            to={`/register?role=${role}`}
-            onClick={() => handleAnalytics('register')}
-            className="flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-          >
-            Register
-          </Link>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="sm:mx-auto sm:w-full sm:max-w-4xl"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Candidate Option */}
+            <Link to="/register?role=candidate" className="group">
+                <Card className="h-full p-8 hover:border-primary hover:shadow-xl transition-all duration-300 flex flex-col items-center text-center cursor-pointer border-2 border-transparent hover:scale-[1.02]">
+                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-6 group-hover:bg-primary/20 transition-colors">
+                        <User className="w-8 h-8 text-primary" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-text-primary mb-3">I'm a Candidate</h3>
+                    <p className="text-text-muted">
+                        Find jobs that match your skills instantly using AI-powered matching.
+                    </p>
+                </Card>
+            </Link>
+
+            {/* Recruiter Option */}
+            <Link to="/register?role=recruiter" className="group">
+                <Card className="h-full p-8 hover:border-secondary hover:shadow-xl transition-all duration-300 flex flex-col items-center text-center cursor-pointer border-2 border-transparent hover:scale-[1.02]">
+                    <div className="w-16 h-16 bg-secondary/10 rounded-full flex items-center justify-center mb-6 group-hover:bg-secondary/20 transition-colors">
+                        <Briefcase className="w-8 h-8 text-secondary" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-text-primary mb-3">I'm a Recruiter</h3>
+                    <p className="text-text-muted">
+                        Post jobs and find the perfect candidates with automated screening.
+                    </p>
+                </Card>
+            </Link>
         </div>
-      </div>
+
+        <div className="mt-12 text-center">
+            <p className="text-text-muted">
+                Already have an account?{' '}
+                <Link to="/login" className="font-semibold text-primary hover:text-primary-dark">
+                    Log in
+                </Link>
+            </p>
+        </div>
+      </motion.div>
     </div>
   );
 };
 
 export default RoleAuthChoice;
+
+

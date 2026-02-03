@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAllJobs, checkJobScore, applyToJob } from '../../api/apiClient';
+import { getAllJobs, checkJobScore, applyToJob, getCandidateApplications } from '../../api/apiClient';
+import { useAuth } from '../../context/AuthContext';
 
 const SpecificJobMatch = () => {
+    const { user } = useAuth();
+    const navigate = useNavigate();
+
     const [jobs, setJobs] = useState([]);
     const [filteredJobs, setFilteredJobs] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -12,20 +16,33 @@ const SpecificJobMatch = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
-    const navigate = useNavigate();
+    const [appliedJobIds, setAppliedJobIds] = useState(new Set());
+
+    // Fetch Jobs and Applications on Mount
+    useEffect(() => {
+        Promise.all([
+            getAllJobs(),
+            user?._id ? getCandidateApplications() : Promise.resolve({ data: [] })
+        ])
+        .then(([jobsRes, appsRes]) => {
+            setJobs(jobsRes.data);
+            setFilteredJobs(jobsRes.data);
+            
+            // Assume appsRes.data is an array of application objects or strings.
+            // Adjust based on actual API response structure. 
+            // If it returns list of full applications, map to jobId.
+            const jobIds = appsRes.data.map(app => 
+                typeof app === 'string' ? app : (app.jobId || app.job?._id || app._id)
+            );
+            setAppliedJobIds(new Set(jobIds));
+        })
+        .catch(err => {
+            console.error(err);
+            setError('Failed to load data');
+        });
+    }, [user?._id]);
 
     useEffect(() => {
-        // Fetch all jobs
-        getAllJobs()
-            .then(res => {
-                setJobs(res.data);
-                setFilteredJobs(res.data);
-            })
-            .catch(err => setError('Failed to load jobs'));
-    }, []);
-
-    useEffect(() => {
-        // Filter jobs based on search term
         const term = searchTerm.toLowerCase();
         const filtered = jobs.filter(job => 
             job.title.toLowerCase().includes(term) ||
@@ -39,6 +56,7 @@ const SpecificJobMatch = () => {
         setMatchResult(null);
         setResume(null);
         setError('');
+        setSuccessMsg('');
     };
 
     const handleFileChange = (e) => {
@@ -76,6 +94,7 @@ const SpecificJobMatch = () => {
         setLoading(true);
         try {
             const applicationData = {
+                candidateId: user?._id,
                 score: matchResult.score,
                 matchingSkills: matchResult.matchingSkills,
                 missingSkills: matchResult.missingSkills,
@@ -83,13 +102,30 @@ const SpecificJobMatch = () => {
             };
 
             await applyToJob(selectedJob._id, applicationData);
+            
+            // Optimistic update
+            const newApplied = new Set(appliedJobIds);
+            newApplied.add(selectedJob._id);
+            setAppliedJobIds(newApplied);
+
             setSuccessMsg('Successfully applied!');
-            setTimeout(() => {
-                navigate('/candidate/dashboard');
-            }, 1500);
+            // We can redirect or stay here to show "Applied" state
+            // setTimeout(() => {
+            //     navigate('/candidate/dashboard');
+            // }, 2000);
 
         } catch (err) {
-             setError(err.response?.data?.message || 'Error applying to job');
+             console.error("Apply error:", err);
+             // If error is "already applied", we can also update state to reflect truth
+             if (err.response?.status === 400 && err.response?.data?.message?.includes('already')) {
+                 const newApplied = new Set(appliedJobIds);
+                 newApplied.add(selectedJob._id);
+                 setAppliedJobIds(newApplied);
+                 setError(''); // Clear error if we handled it by UI state
+             } else {
+                 setError(err.response?.data?.message || 'Error applying to job');
+             }
+        } finally {
              setLoading(false);
         }
     };
@@ -99,186 +135,288 @@ const SpecificJobMatch = () => {
         setMatchResult(null);
         setResume(null);
         setError('');
+        setSuccessMsg('');
     };
 
-    return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-8">Specific Job Match</h1>
+    const isJobApplied = selectedJob && appliedJobIds.has(selectedJob._id);
 
-            {!selectedJob ? (
-                <>
-                    <div className="mb-6">
-                        <label htmlFor="search" className="block text-sm font-medium text-gray-700">Search Jobs</label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                            <input
-                                type="text"
-                                name="search"
-                                id="search"
-                                className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-4 sm:text-sm border-gray-300 rounded-md"
-                                placeholder="Search by job title or description"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
+    // --- Render Helpers ---
+
+    const renderSearchBar = () => (
+        <div className="relative max-w-2xl mx-auto mb-12">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </div>
+            <input
+                type="text"
+                className="block w-full pl-12 pr-4 py-4 rounded-full border-2 border-gray-100 shadow-lg text-lg focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all placeholder-gray-400 text-gray-800"
+                placeholder="Search for roles (e.g. 'Frontend Developer')"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+                <button 
+                    onClick={() => setSearchTerm('')}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            )}
+        </div>
+    );
+
+    const renderJobCard = (job) => (
+        <div key={job._id} className="bg-white rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col h-full group overflow-hidden cursor-pointer" onClick={() => handleJobSelect(job)}>
+            <div className="p-6 flex-1 flex flex-col">
+                <div className="flex justify-between items-start mb-4">
+                    <div className="p-2 bg-indigo-50 rounded-lg group-hover:bg-indigo-100 transition-colors">
+                        <svg className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    {appliedJobIds.has(job._id) && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                             Applied
+                        </span>
+                    )}
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{job.title}</h3>
+                <p className="text-sm text-gray-500 line-clamp-3 mb-4 flex-grow">{job.description}</p>
+                
+                <div className="pt-4 border-t border-gray-50 flex items-center justify-between mt-auto">
+                    <span className="text-sm font-medium text-indigo-600 group-hover:underline">View Details</span>
+                    <svg className="h-5 w-5 text-gray-300 group-hover:text-indigo-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="min-h-screen bg-gray-50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <div className="text-center mb-10">
+                    <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-2">
+                        Find Your <span className="text-indigo-600">Perfect Match</span>
+                    </h1>
+                    <p className="text-lg text-gray-500">AI-powered analysis to help you land the right job.</p>
+                </div>
+
+                {!selectedJob ? (
+                    <>
+                        {renderSearchBar()}
+                        {filteredJobs.length > 0 ? (
+                            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
+                                {filteredJobs.map(job => renderJobCard(job))}
+                            </div>
+                        ) : (
+                             <div className="text-center py-20 bg-white rounded-xl shadow-sm border border-gray-100">
+                                <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <h3 className="mt-2 text-sm font-medium text-gray-900">No jobs found</h3>
+                                <p className="mt-1 text-sm text-gray-500">Try adjusting your search terms.</p>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div className="bg-white min-h-[600px] rounded-2xl shadow-xl overflow-hidden flex flex-col md:flex-row animate-in fade-in zoom-in-95 duration-200">
+                        {/* Left Panel: Job Info */}
+                        <div className="p-8 md:w-1/2 lg:w-2/5 bg-gray-50 border-r border-gray-100 flex flex-col">
+                            <button onClick={handleCancel} className="mb-6 flex items-center text-sm text-gray-500 hover:text-indigo-600 transition-colors w-fit">
+                                <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                                Back to Jobs
+                            </button>
+                            
+                            <h2 className="text-3xl font-bold text-gray-900 mb-4">{selectedJob?.title}</h2>
+                            <div className="prose prose-sm text-gray-600 mb-8 overflow-y-auto max-h-[400px] custom-scrollbar">
+                                <p>{selectedJob?.description}</p>
+                                <h4 className="text-gray-900 font-semibold mt-4 mb-2">Requirements (Extracted)</h4>
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li>Experience with modern frontend frameworks</li>
+                                    <li>Understanding of RESTful APIs</li>
+                                    <li>Strong problem-solving skills</li>
+                                </ul>
+                            </div>
+
+                            {!matchResult && (
+                                <div className="mt-auto bg-white p-6 rounded-xl border border-indigo-100 shadow-sm">
+                                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                                        <svg className="h-5 w-5 text-indigo-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        Analyze Resume Match
+                                    </h4>
+                                    <form onSubmit={handleCheckScore} className="space-y-4">
+                                        <label className="block w-full cursor-pointer hover:bg-slate-50 transition-colors border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                                            <span className="block text-sm font-medium text-gray-600 mb-1">{resume ? resume.name : "Upload Resume (PDF/DOCX)"}</span>
+                                            <span className="block text-xs text-gray-400">Click to browse files</span>
+                                            <input type="file" className="hidden" onChange={handleFileChange} accept=".pdf,.doc,.docx" />
+                                        </label>
+                                        <button
+                                            type="submit"
+                                            disabled={!resume || loading}
+                                            className="w-full py-3 px-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
+                                        >
+                                            {loading && (
+                                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                            )}
+                                            {loading ? 'Analyzing with AI...' : 'Run Match Analysis'}
+                                        </button>
+                                    </form>
+                                    {error && <p className="text-red-600 text-sm mt-3 bg-red-50 p-2 rounded">{error}</p>}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Right Panel: Analysis Result */}
+                        <div className="p-8 md:w-1/2 lg:w-3/5 bg-white relative flex flex-col justify-center">
+                            {/* Background Pattern */}
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-bl-full opacity-50 pointer-events-none"></div>
+
+                            {!matchResult ? (
+                                <div className="flex flex-col items-center justify-center text-center h-full text-gray-400 p-8 space-y-4">
+                                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-2">
+                                         <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                                         </svg>
+                                    </div>
+                                    <p className="text-lg font-medium text-gray-500">Ready to analyze</p>
+                                    <p className="max-w-xs text-sm">Upload your resume on the left to see how well you match this role.</p>
+                                </div>
+                            ) : (
+                                <div className="w-full max-w-lg mx-auto animate-in slide-in-from-right-4 duration-500">
+                                     {successMsg ? (
+                                         <div className="text-center py-12">
+                                             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                                                 <svg className="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                 </svg>
+                                             </div>
+                                             <h3 className="text-2xl font-bold text-gray-900 mb-2">Application Sent!</h3>
+                                             <p className="text-gray-500">You can continue analyzing other jobs.</p>
+                                             <button 
+                                                 onClick={handleCancel}
+                                                 className="mt-6 px-6 py-2 bg-indigo-50 text-indigo-700 font-medium rounded-lg hover:bg-indigo-100 transition-colors"
+                                             >
+                                                 Check Another Job
+                                             </button>
+                                         </div>
+                                     ) : (
+                                         <>
+                                            <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+                                                <span className="bg-indigo-600 w-1.5 h-6 rounded-full mr-3"></span>
+                                                Analysis Result
+                                            </h3>
+
+                                            {/* Score Card */}
+                                            <div className="bg-gradient-to-br from-indigo-50 to-white p-6 rounded-2xl border border-indigo-100 shadow-sm mb-8 flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm font-semibold text-indigo-900 uppercase tracking-wider mb-1">Match Score</p>
+                                                    <p className="text-3xl font-extrabold text-indigo-600">{matchResult.score}%</p>
+                                                </div>
+                                                <div className="relative w-20 h-20">
+                                                     <svg className="w-full h-full transform -rotate-90">
+                                                        <circle cx="40" cy="40" r="36" stroke="white" strokeWidth="8" fill="transparent" className="text-gray-200" />
+                                                        <circle 
+                                                            cx="40" 
+                                                            cy="40" 
+                                                            r="36" 
+                                                            stroke="currentColor" 
+                                                            strokeWidth="8" 
+                                                            fill="transparent" 
+                                                            strokeDasharray={226.2} 
+                                                            strokeDashoffset={226.2 - (226.2 * matchResult.score) / 100} 
+                                                            className="text-indigo-600 transition-all duration-1000 ease-out" 
+                                                        />
+                                                     </svg>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-6">
+                                                {/* Matched Skills */}
+                                                <div>
+                                                    <h4 className="flex items-center text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                                                        <svg className="w-4 h-4 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                        Matched Skills
+                                                    </h4>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {matchResult.matchingSkills?.length ? matchResult.matchingSkills.map((skill, idx) => (
+                                                            <span key={idx} className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium border border-green-200">
+                                                                {skill}
+                                                            </span>
+                                                        )) : <span className="text-sm text-gray-400 italic">No direct skill matches found.</span>}
+                                                    </div>
+                                                </div>
+
+                                                {/* Missing Skills */}
+                                                <div>
+                                                    <h4 className="flex items-center text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                                                        <svg className="w-4 h-4 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                        Missing Skills
+                                                    </h4>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {matchResult.missingSkills?.length ? matchResult.missingSkills.map((skill, idx) => (
+                                                            <span key={idx} className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-sm font-medium border border-red-100">
+                                                                {skill}
+                                                            </span>
+                                                        )) : <span className="text-sm text-gray-400 italic">Great! No missing skills identified.</span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="pt-8 mt-auto">
+                                                {isJobApplied ? (
+                                                    <button 
+                                                        disabled
+                                                        className="w-full py-4 bg-green-600 text-white rounded-xl font-bold shadow-sm cursor-not-allowed text-lg flex justify-center items-center opacity-90"
+                                                    >
+                                                        <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                        Already Applied
+                                                    </button>
+                                                ) : (
+                                                    <button 
+                                                        onClick={handleApply}
+                                                        disabled={loading}
+                                                        className={`w-full py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all text-lg flex justify-center items-center group
+                                                            ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-900 hover:bg-black text-white'}
+                                                        `}
+                                                    >
+                                                        {loading ? 'Submitting...' : 'Apply for this Position'}
+                                                        {!loading && (
+                                                            <svg className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                                            </svg>
+                                                        )}
+                                                    </button>
+                                                )}
+                                                
+                                                {error && <p className="text-red-500 text-center mt-2">{error}</p>}
+                                            </div>
+                                         </>
+                                     )}
+                                </div>
+                            )}
                         </div>
                     </div>
-
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {filteredJobs.length > 0 ? filteredJobs.map(job => (
-                             <div key={job._id} className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow duration-300">
-                                <div className="px-4 py-5 sm:p-6 flex flex-col h-full">
-                                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">{job.title}</h3>
-                                    <p className="text-sm text-gray-500 flex-grow mb-4 line-clamp-3">{job.description}</p>
-                                    <button
-                                        onClick={() => handleJobSelect(job)}
-                                        className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:text-sm"
-                                    >
-                                        Select Job
-                                    </button>
-                                </div>
-                            </div>
-                        )) : (
-                            <p className="text-gray-500 col-span-full text-center py-8">No jobs found matching your search.</p>
-                        )}
-                    </div>
-                </>
-            ) : (
-                <div className="bg-white shadow sm:rounded-lg">
-                    <div className="px-4 py-5 sm:p-6">
-                         <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h3 className="text-2xl leading-6 font-medium text-gray-900">{selectedJob.title}</h3>
-                                <p className="mt-1 max-w-2xl text-sm text-gray-500">{selectedJob.description}</p>
-                            </div>
-                             {!matchResult && (
-                                <button onClick={handleCancel} className="text-gray-400 hover:text-gray-500">
-                                    <span className="sr-only">Close</span>
-                                    <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            )}
-                         </div>
-
-                         {error && (
-                            <div className="mb-4 bg-red-50 border-l-4 border-red-500 p-4">
-                                <div className="flex">
-                                    <div className="flex-shrink-0">
-                                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div className="ml-3">
-                                        <p className="text-sm text-red-700">{error}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        
-                        {successMsg && (
-                             <div className="mb-4 bg-green-50 border-l-4 border-green-500 p-4">
-                                <div className="flex">
-                                    <div className="flex-shrink-0">
-                                        <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div className="ml-3">
-                                        <p className="text-sm text-green-700">{successMsg}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {!matchResult ? (
-                            <form onSubmit={handleCheckScore} className="mt-5 space-y-6">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Upload Resume (PDF, DOC, DOCX)</label>
-                                    <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                                        <div className="space-y-1 text-center">
-                                            <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                            </svg>
-                                            <div className="flex text-sm text-gray-600">
-                                                <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
-                                                    <span>Upload a file</span>
-                                                    <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleFileChange} accept=".pdf,.doc,.docx" />
-                                                </label>
-                                                <p className="pl-1">or drag and drop</p>
-                                            </div>
-                                            <p className="text-xs text-gray-500">PDF, DOC, DOCX up to 10MB</p>
-                                        </div>
-                                    </div>
-                                    {resume && <p className="mt-2 text-sm text-gray-600">Selected file: {resume.name}</p>}
-                                </div>
-
-                                <div className="flex justify-end space-x-3">
-                                     <button
-                                        type="button"
-                                        onClick={handleCancel}
-                                        className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={!resume || loading}
-                                        className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300"
-                                    >
-                                        {loading ? 'Analyzing...' : 'Analyze Match'}
-                                    </button>
-                                </div>
-                            </form>
-                        ) : (
-                            <div className="mt-6">
-                                <h4 className="text-xl font-bold text-gray-900 mb-4">Match Analysis</h4>
-                                
-                                <div className="bg-gray-50 p-6 rounded-lg mb-6">
-                                    <div className="flex items-center mb-4">
-                                        <div className="text-4xl font-bold text-indigo-600 mr-4">{matchResult.score}%</div>
-                                        <div className="text-gray-700 font-medium">Match Score</div>
-                                    </div>
-
-                                    <div className="grid md:grid-cols-2 gap-6">
-                                        <div>
-                                            <h5 className="font-semibold text-green-700 mb-2">Matching Skills</h5>
-                                            <div className="flex flex-wrap gap-2">
-                                                {matchResult.matchingSkills.length > 0 ? matchResult.matchingSkills.map((skill, idx) => (
-                                                    <span key={idx} className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">{skill}</span>
-                                                )) : <span className="text-sm text-gray-500">None</span>}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <h5 className="font-semibold text-red-700 mb-2">Missing Skills</h5>
-                                             <div className="flex flex-wrap gap-2">
-                                                {matchResult.missingSkills.length > 0 ? matchResult.missingSkills.map((skill, idx) => (
-                                                    <span key={idx} className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">{skill}</span>
-                                                )) : <span className="text-sm text-gray-500">None</span>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex justify-end space-x-4">
-                                    <button
-                                        onClick={handleCancel}
-                                        disabled={loading}
-                                        className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-32"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleApply}
-                                        disabled={loading}
-                                        className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-32"
-                                    >
-                                        {loading ? 'Applying...' : 'Apply Now'}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };
