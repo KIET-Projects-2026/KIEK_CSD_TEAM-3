@@ -189,7 +189,7 @@ const RecruiterJobs = () => {
                                 <Calendar className="w-4 h-4 mr-1.5" />
                                 <span>{new Date().toLocaleDateString()}</span>
                                 <span className="mx-2">•</span>
-                                <span>Full-time</span>
+                                <span>{job.jobType || 'Full-time'}</span>
                             </div>
                             <p className="text-sm text-gray-600 line-clamp-2 h-10">{job.description}</p>
                         </div>

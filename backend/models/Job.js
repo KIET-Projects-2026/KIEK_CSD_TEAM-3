@@ -14,6 +14,34 @@ const jobSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    requiredSkills: {
+        type: [String],
+        default: []
+    },
+    minExperience: {
+        type: Number,
+        default: 0
+    },
+    maxExperience: {
+        type: Number
+    },
+    education: {
+        type: String,
+        default: 'Any Degree'
+    },
+    jobType: {
+        type: String,
+        enum: ['Full-time', 'Internship', 'Contract'],
+        default: 'Full-time'
+    },
+    location: {
+        type: String,
+        default: 'Remote'
+    },
+    companyName: {
+        type: String,
+        default: 'Company Not Specified'
+    },
     createdAt: {
         type: Date,
         default: Date.now

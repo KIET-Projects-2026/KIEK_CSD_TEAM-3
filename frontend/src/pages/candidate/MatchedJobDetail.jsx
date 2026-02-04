@@ -1,15 +1,42 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { applyToJob, getCandidateApplications } from '../../api/apiClient';
+import { applyToJob, getCandidateApplications, getAllJobs } from '../../api/apiClient';
 
 const MatchedJobDetail = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const job = location.state?.job;
+  const initialJob = location.state?.job;
+  const [job, setJob] = useState(initialJob);
 
   const [isApplied, setIsApplied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingAppStatus, setLoadingAppStatus] = useState(true);
+
+  // Fallback: Fetch latest job data if company name is missing/default
+  useEffect(() => {
+    if (job?.jobId && (!job.companyName || job.companyName === 'Company Not Specified')) {
+        const fetchFreshData = async () => {
+            try {
+                const response = await getAllJobs();
+                const freshJob = response.data.find(j => j._id === job.jobId || j.id === job.jobId);
+                if (freshJob) {
+                    // Merge fresh data but preserve score if missing in list response (though list should have it? No, list is from DB, score is from match)
+                    // Actually getAllJobs returns DB objects, NOT match scores.
+                    // So we only update static fields: companyName, title, description, etc.
+                    setJob(prev => ({
+                        ...prev,
+                        companyName: freshJob.companyName || prev.companyName,
+                        location: freshJob.location || prev.location,
+                        // Update other fields if needed
+                    }));
+                }
+            } catch (error) {
+                console.error("Failed to fetch fresh job details", error);
+            }
+        };
+        fetchFreshData();
+    }
+  }, [job?.jobId]); 
 
   useEffect(() => {
       if (job?.jobId) {
@@ -98,7 +125,7 @@ const MatchedJobDetail = () => {
                 <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 ring-1 ring-blue-600/10">
-                            {job.type || 'Full-time'}
+                            {job.jobType || 'Full-time'}
                         </span>
                         <span className="text-sm text-gray-500">ID: {job.jobId?.substring(0,8)}</span>
                     </div>
@@ -108,7 +135,7 @@ const MatchedJobDetail = () => {
                      <div className="flex items-center text-gray-600 text-sm gap-6">
                          <span className="flex items-center">
                             <svg className="w-5 h-5 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                            {job.company || 'Company Not Specified'}
+                            {job.companyName || 'Company Not Specified'}
                         </span>
                          <span className="flex items-center">
                             <svg className="w-5 h-5 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -150,6 +177,25 @@ const MatchedJobDetail = () => {
                 
                 {/* Left: Description */}
                 <div className="p-8 md:col-span-2">
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-500 font-medium uppercase">Experience</p>
+                            <p className="text-sm font-semibold text-gray-900">{job.minExperience || 0} - {job.maxExperience || 'Any'} Years</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-500 font-medium uppercase">Education</p>
+                            <p className="text-sm font-semibold text-gray-900">{job.education || 'Any Degree'}</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-500 font-medium uppercase">Job Type</p>
+                            <p className="text-sm font-semibold text-gray-900">{job.jobType || 'Full-time'}</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-500 font-medium uppercase">Location</p>
+                            <p className="text-sm font-semibold text-gray-900">{job.location || 'Remote'}</p>
+                        </div>
+                    </div>
+
                     <h3 className="text-lg font-bold text-gray-900 mb-4">About the Role</h3>
                     <p className="text-gray-600 leading-relaxed max-w-none text-base">
                         {job.description || 'No detailed description provided for this role.'}

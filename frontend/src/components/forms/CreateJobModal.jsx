@@ -54,7 +54,7 @@ const CreateJobModal = ({ isOpen, onClose, onSuccess }) => {
                             </button>
                         </div>
                         
-                        <form onSubmit={handlePostJob} className="p-6 space-y-6">
+                        <form onSubmit={handlePostJob} className="p-6 space-y-5">
                             <Input 
                                 label="Job Title"
                                 icon={<Briefcase className="w-4 h-4 text-gray-400" />}
@@ -62,6 +62,72 @@ const CreateJobModal = ({ isOpen, onClose, onSuccess }) => {
                                 required
                                 value={jobForm.title}
                                 onChange={e => setJobForm({...jobForm, title: e.target.value})}
+                            />
+
+                            {/* New Fields Section */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <Input 
+                                    label="Location"
+                                    placeholder="e.g. Remote, Bangalore"
+                                    value={jobForm.location || ''}
+                                    onChange={e => setJobForm({...jobForm, location: e.target.value})}
+                                />
+                                <div>
+                                    <label className="block text-sm font-medium text-text-primary mb-1.5 ml-1">Job Type</label>
+                                    <select 
+                                        className="block w-full rounded-xl border-gray-200 bg-gray-50/50 p-2.5 text-sm focus:bg-white focus:border-primary focus:ring-primary transition-all"
+                                        value={jobForm.jobType || 'Full-time'}
+                                        onChange={e => setJobForm({...jobForm, jobType: e.target.value})}
+                                    >
+                                        <option value="Full-time">Full-time</option>
+                                        <option value="Internship">Internship</option>
+                                        <option value="Contract">Contract</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <Input 
+                                    label="Min Experience (Yrs)"
+                                    type="number"
+                                    min="0"
+                                    value={jobForm.minExperience || ''}
+                                    onChange={e => setJobForm({...jobForm, minExperience: Number(e.target.value)})}
+                                />
+                                <Input 
+                                    label="Max Experience (Yrs)"
+                                    type="number"
+                                    min="0"
+                                    value={jobForm.maxExperience || ''}
+                                    onChange={e => setJobForm({...jobForm, maxExperience: Number(e.target.value)})}
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-text-primary mb-1.5 ml-1">Education</label>
+                                <select 
+                                    className="block w-full rounded-xl border-gray-200 bg-gray-50/50 p-2.5 text-sm focus:bg-white focus:border-primary focus:ring-primary transition-all"
+                                    value={jobForm.education || 'Any Degree'}
+                                    onChange={e => setJobForm({...jobForm, education: e.target.value})}
+                                >
+                                    <option value="Any Degree">Any Degree</option>
+                                    <option value="B.Tech">B.Tech</option>
+                                    <option value="MCA">MCA</option>
+                                    <option value="MBA">MBA</option>
+                                    <option value="M.Tech">M.Tech</option>
+                                    <option value="PhD">PhD</option>
+                                </select>
+                            </div>
+
+                            <Input 
+                                label="Required Skills (Comma separated)"
+                                placeholder="e.g. React, Node.js, Python"
+                                value={jobForm.requiredSkillsString || ''}
+                                onChange={e => setJobForm({
+                                    ...jobForm, 
+                                    requiredSkillsString: e.target.value,
+                                    requiredSkills: e.target.value.split(',').map(s => s.trim()).filter(s => s)
+                                })}
                             />
                             
                             <div>
@@ -74,9 +140,9 @@ const CreateJobModal = ({ isOpen, onClose, onSuccess }) => {
                                     </div>
                                     <textarea 
                                         required
-                                        rows={5}
+                                        rows={4}
                                         className="block w-full rounded-xl border-gray-200 pl-10 bg-gray-50/50 focus:bg-white focus:border-primary focus:ring-primary sm:text-sm transition-all duration-200"
-                                        placeholder="Describe the role, responsibilities, and requirements..."
+                                        placeholder="Describe the role, responsibilities..."
                                         value={jobForm.description}
                                         onChange={e => setJobForm({...jobForm, description: e.target.value})}
                                     />

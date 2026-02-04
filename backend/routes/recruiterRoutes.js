@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Application = require('../models/Application');
 const Job = require('../models/Job');
+const User = require('../models/User');
 
 // @route   GET /api/recruiter/applications/:jobId
 // @desc    Get all applications for a specific job (Owned by recruiter)
@@ -57,7 +58,16 @@ router.get('/jobs', async (req, res) => {
 // @access  Protected
 router.post('/jobs', async (req, res) => {
     try {
-        const { title, description } = req.body;
+        const { 
+            title, 
+            description, 
+            requiredSkills, 
+            minExperience, 
+            maxExperience, 
+            education, 
+            jobType, 
+            location 
+        } = req.body;
         const recruiterId = req.user.id;
         
         // Validation
@@ -65,10 +75,32 @@ router.post('/jobs', async (req, res) => {
             return res.status(400).json({ message: 'Title and description are required' });
         }
 
+        // Validate Experience
+        if (minExperience && maxExperience && Number(minExperience) > Number(maxExperience)) {
+             return res.status(400).json({ message: 'Minimum experience cannot be greater than maximum experience' });
+        }
+
+        // Parse Skills if string
+        let skillsArray = requiredSkills;
+        if (typeof requiredSkills === 'string') {
+            skillsArray = requiredSkills.split(',').map(s => s.trim()).filter(s => s);
+        }
+
+        // Fetch Recruiter Profile for Company Name
+        const recruiter = await User.findById(recruiterId);
+        const companyName = recruiter ? recruiter.companyName : 'Not Specified';
+
         const newJob = new Job({
             recruiterId,
             title,
-            description
+            description,
+            companyName,
+            requiredSkills: skillsArray || [],
+            minExperience: Number(minExperience) || 0,
+            maxExperience: Number(maxExperience) || 0,
+            education: education || 'Any Degree',
+            jobType: jobType || 'Full-time',
+            location: location || 'Remote'
         });
 
         const job = await newJob.save();
